@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payments Console</title>
+<script>
+  try { document.documentElement.dataset.theme = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (e) {}
+</script>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#ffffff; --text:#0f172a; --muted:#64748b; --line:#e5e8ee; --soft:#f1f4f8; --hover:#f8fafc;
+    --accent:#2563eb; --accent-h:#1d4ed8; --accent-soft:#e8f0fe;
+    --ok:#15803d; --ok-bg:#e7f6ec; --warn:#a16207; --warn-bg:#fdf3d6; --bad:#b91c1c; --bad-bg:#fdecec; --info:#1d4ed8; --info-bg:#e8f0fe;
+    --tl:94%; --tt:38%; --shadow:0 1px 2px rgba(15,23,42,.05), 0 1px 3px rgba(15,23,42,.06); --shadow-lg:0 20px 50px rgba(15,23,42,.18);
+  }
+  :root[data-theme="dark"] {
+    color-scheme:dark;
+    --bg:#0b1020; --card:#121a2e; --text:#e6eaf5; --muted:#8a95b0; --line:#232d47; --soft:#18223a; --hover:#16203a;
+    --accent:#4f8cff; --accent-h:#74a3ff; --accent-soft:#16264a;
+    --ok:#4ade80; --ok-bg:#12301f; --warn:#fbbf24; --warn-bg:#352a0e; --bad:#f87171; --bad-bg:#3a1b1d; --info:#74a3ff; --info-bg:#16264a;
+    --tl:22%; --tt:78%; --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 20px 50px rgba(0,0,0,.55);
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.55 "Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
+  .ic { flex:none; vertical-align:-3px; }
+  button, input, select { font:inherit; color:inherit; }
+
+  .app { display:grid; grid-template-columns:232px 1fr; min-height:100vh; }
+  .side { background:var(--card); border-right:1px solid var(--line); padding:18px 12px; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; }
+  .brand { display:flex; align-items:center; gap:10px; padding:4px 10px 18px; font-weight:700; font-size:16px; letter-spacing:-.01em; }
+  .logo { width:30px; height:30px; border-radius:8px; background:var(--accent); color:#fff; display:grid; place-items:center; font-weight:800; }
+  .side nav { display:flex; flex-direction:column; gap:2px; }
+  .side nav a { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; color:var(--muted); text-decoration:none; font-weight:500; }
+  .side nav a:hover { background:var(--soft); color:var(--text); }
+  .side nav a.active { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .side .foot { margin-top:auto; padding:12px 10px 0; border-top:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--muted); font-size:12px; }
+  .content { min-width:0; }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 28px; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:15; }
+  .top h1 { margin:0; font-size:18px; font-weight:700; letter-spacing:-.01em; }
+  .top .sub { margin:0; color:var(--muted); font-size:13px; }
+  main { padding:24px 28px 80px; max-width:1180px; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  .pad { padding:18px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; border:1px solid transparent; background:var(--accent); color:#fff; border-radius:8px; padding:8px 14px; font-weight:600; cursor:pointer; transition:background .12s; white-space:nowrap; }
+  .btn:hover { background:var(--accent-h); }
+  .btn:disabled { opacity:.55; cursor:not-allowed; }
+  .btn.outline { background:var(--card); color:var(--text); border-color:var(--line); }
+  .btn.outline:hover { background:var(--soft); }
+  .btn.danger { background:var(--bad); } .btn.danger:hover { filter:brightness(1.08); }
+  .btn.sm { padding:5px 10px; font-size:13px; } .btn.block { width:100%; padding:11px; }
+  .btn.icon { padding:8px; }
+  input, select { width:100%; padding:8px 11px; border:1px solid var(--line); border-radius:8px; background:var(--card); }
+  input:focus, select:focus { outline:2px solid color-mix(in srgb, var(--accent) 40%, transparent); border-color:var(--accent); }
+  label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:12px 0 5px; }
+  .badge { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; }
+  .badge::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .b-paid,.b-captured,.b-verified,.b-processed,.b-confirmed { background:var(--ok-bg); color:var(--ok); }
+  .b-unpaid,.b-created,.b-pending,.b-received,.b-ignored { background:var(--warn-bg); color:var(--warn); }
+  .b-failed,.b-invalid_signature { background:var(--bad-bg); color:var(--bad); }
+  .pill { display:inline-block; padding:1px 8px; border-radius:6px; background:var(--soft); color:var(--muted); font-size:12px; font-weight:600; border:1px solid var(--line); }
+  .muted { color:var(--muted); } .right { text-align:right; } .nowrap { white-space:nowrap; }
+  code { font:12px ui-monospace,SFMono-Regular,Consolas,monospace; background:var(--soft); padding:1px 6px; border-radius:5px; }
+  .toolbar { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .toolbar .grow { flex:1; min-width:180px; max-width:340px; position:relative; } .toolbar .grow input { padding-left:34px; }
+  .toolbar .grow .ic { position:absolute; left:11px; top:10px; color:var(--muted); }
+  .toolbar select { width:auto; }
+  .tabs { display:inline-flex; background:var(--soft); border-radius:9px; padding:3px; gap:2px; }
+  .tabs button { border:0; background:transparent; padding:5px 14px; border-radius:7px; cursor:pointer; color:var(--muted); font-weight:600; }
+  .tabs button.on { background:var(--card); color:var(--text); box-shadow:var(--shadow); }
+
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; font-weight:600; color:var(--muted); padding:11px 16px; border-bottom:1px solid var(--line); background:var(--hover); white-space:nowrap; }
+  td { padding:13px 16px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:0; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:var(--hover); }
+  .empty { padding:56px 20px; text-align:center; color:var(--muted); }
+  .empty b { display:block; color:var(--text); margin-bottom:4px; font-size:15px; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+  .prod { padding:12px; display:flex; flex-direction:column; gap:12px; transition:box-shadow .15s, transform .15s; }
+  .prod:hover { box-shadow:0 8px 24px rgba(15,23,42,.1); transform:translateY(-2px); }
+  .tile { height:120px; border-radius:9px; display:grid; place-items:center; font-size:44px; font-weight:700; background:hsl(var(--h) 75% var(--tl)); color:hsl(var(--h) 55% var(--tt)); position:relative; }
+  .tile .badge { position:absolute; top:8px; left:8px; }
+  .prod h3 { margin:0; font-size:15px; font-weight:600; }
+  .price { font-size:18px; font-weight:700; letter-spacing:-.01em; }
+  .stepper { display:flex; align-items:center; justify-content:space-between; border:1px solid var(--line); border-radius:8px; padding:3px; }
+  .stepper button { width:30px; height:30px; border:0; background:var(--soft); border-radius:6px; cursor:pointer; font-size:16px; font-weight:700; }
+  .stepper button:disabled { opacity:.4; cursor:not-allowed; }
+  .skeleton { height:250px; border-radius:12px; background:linear-gradient(90deg,var(--soft),var(--line),var(--soft)); background-size:200% 100%; animation:sk 1.3s infinite; }
+  @keyframes sk { to { background-position:-200% 0; } }
+
+  #scrim { position:fixed; inset:0; background:rgba(10,14,28,.45); z-index:40; }
+  .panel { position:fixed; right:0; top:0; bottom:0; width:min(420px,100vw); background:var(--card); z-index:41; box-shadow:var(--shadow-lg); display:flex; flex-direction:column; animation:slide .2s ease; }
+  @keyframes slide { from { transform:translateX(30px); opacity:0; } }
+  .panel header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line); }
+  .panel header h2 { margin:0; font-size:16px; }
+  .panel .body { flex:1; overflow:auto; padding:6px 20px 20px; }
+  .panel .foot { padding:16px 20px; border-top:1px solid var(--line); background:var(--hover); }
+  .cline { display:flex; gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); }
+  .cline .tile { height:44px; width:44px; font-size:18px; border-radius:8px; flex:none; }
+  .cline .info { flex:1; min-width:0; } .cline .info b { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cline .stepper { padding:2px; } .cline .stepper button { width:24px; height:24px; font-size:14px; } .cline .stepper span { min-width:22px; text-align:center; font-weight:600; }
+  .sumrow { display:flex; justify-content:space-between; padding:3px 0; }
+  .sumrow.total { font-size:17px; font-weight:700; padding-top:10px; margin-top:6px; border-top:1px solid var(--line); }
+  .methods { display:flex; gap:6px; flex-wrap:wrap; margin:12px 0; }
+  .secure { display:flex; align-items:center; justify-content:center; gap:6px; color:var(--muted); font-size:12px; margin-top:10px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+  dialog { border:0; border-radius:14px; padding:0; width:min(680px,94vw); background:var(--card); color:var(--text); box-shadow:var(--shadow-lg); }
+  dialog.sm { width:min(420px,94vw); }
+  dialog::backdrop { background:rgba(10,14,28,.5); }
+  .dhead { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:16px 22px; border-bottom:1px solid var(--line); }
+  .dhead h2 { margin:0; font-size:16px; }
+  .dbody { padding:4px 22px 20px; max-height:72vh; overflow:auto; }
+  .dfoot { display:flex; justify-content:flex-end; gap:8px; padding:14px 22px; border-top:1px solid var(--line); background:var(--hover); border-radius:0 0 14px 14px; }
+  .section { margin-top:20px; } .section h3 { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  .linkbox { display:flex; gap:8px; align-items:center; background:var(--soft); border:1px solid var(--line); border-radius:9px; padding:8px 8px 8px 12px; }
+  .linkbox a { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--accent); font-weight:600; text-decoration:none; }
+  .timeline { margin:0; padding:0; list-style:none; }
+  .timeline li { position:relative; padding:0 0 14px 22px; }
+  .timeline li::before { content:""; position:absolute; left:4px; top:6px; width:9px; height:9px; border-radius:50%; background:var(--line); }
+  .timeline li.captured::before { background:var(--ok); } .timeline li.failed::before { background:var(--bad); }
+  .timeline li::after { content:""; position:absolute; left:8px; top:18px; bottom:0; width:1px; background:var(--line); }
+  .timeline li:last-child::after { display:none; }
+  details pre { margin:8px 0 0; padding:12px; background:var(--soft); border-radius:8px; overflow:auto; font-size:12px; max-height:260px; }
+  summary { cursor:pointer; color:var(--muted); font-size:13px; }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:16px; margin-bottom:16px; }
+  .stat { padding:18px; } .stat .l { color:var(--muted); font-size:13px; font-weight:500; display:flex; align-items:center; gap:8px; }
+  .stat .v { font-size:28px; font-weight:700; letter-spacing:-.02em; margin-top:6px; }
+
+  .b-cancelled { background:var(--soft); color:var(--muted); }
+  .tile img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; }
+  .tile .badge { z-index:1; }
+  .clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:13px; min-height:38px; }
+  .banner { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 14px; border-radius:10px; margin-top:14px; font-weight:600; }
+  .banner.ok { background:var(--ok-bg); color:var(--ok); } .banner.bad { background:var(--bad-bg); color:var(--bad); }
+  .banner a { text-decoration:none; }
+  #toasts { position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:8px; z-index:99; }
+  .toast { padding:11px 16px; border-radius:9px; background:var(--text); color:var(--bg); font-weight:500; box-shadow:var(--shadow-lg); max-width:360px; animation:in .2s; }
+  .toast.err { background:var(--bad); color:#fff; } .toast.ok { background:var(--ok); color:#fff; }
+  :root[data-theme="dark"] .toast.ok { color:#04210f; } :root[data-theme="dark"] .toast.err { color:#2a0709; }
+  @keyframes in { from { opacity:0; transform:translateY(8px); } }
+
+  @media (max-width:860px) {
+    .app { grid-template-columns:1fr; }
+    .side { position:fixed; bottom:0; left:0; right:0; top:auto; height:auto; z-index:30; flex-direction:row; padding:6px; border-right:0; border-top:1px solid var(--line); }
+    .side .brand, .side .foot { display:none; }
+    .side nav { flex-direction:row; width:100%; justify-content:space-around; }
+    .side nav a { flex-direction:column; gap:2px; font-size:11px; padding:6px 8px; }
+    main, .top { padding-left:16px; padding-right:16px; } main { padding-bottom:96px; }
+    .two { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="logo">₹</span> Payments Console</div>
+    <nav id="nav"></nav>
+    <div class="foot"><span id="mode">Test mode</span><button class="btn outline icon sm" id="theme" title="Toggle theme"></button></div>
+  </aside>
+  <div class="content">
+    <div class="top"><div><h1 id="title"></h1><p class="sub" id="subtitle"></p></div><div id="topactions"></div></div>
+    <main id="view"></main>
+  </div>
+</div>
+
+<div id="scrim" hidden></div>
+<aside class="panel" id="cartpanel" hidden></aside>
+<dialog id="dlg"></dialog>
+<dialog id="cdlg" class="sm"></dialog>
+<div id="toasts"></div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const inr = (p) => '₹' + (p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const when = (d) => d ? new Date(d).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+const badge = (v) => v ? `<span class="badge b-${esc(v)}">${esc(v)}</span>` : '<span class="muted">-</span>';
+const hue = (s) => [...String(s)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
+const tileHTML = (p, style = '', inner = '') => `<div class="tile" style="--h:${hue(p.name)};${style}">${inner}${esc(p.name[0].toUpperCase())}${p.image_url ? `<img src="${esc(p.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</div>`;
+
+const ICONS = {
+  shop:'<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  orders:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h6"/>',
+  products:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/>',
+  webhooks:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  dashboard:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  cart:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>',
+  moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  trash:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  card:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+  external:'<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/>',
+};
+const I = (n, s = 17) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
+
+function toast(msg, kind = '') {
+  const t = document.createElement('div'); t.className = 'toast ' + kind; t.textContent = msg;
+  $('#toasts').append(t); setTimeout(() => t.remove(), 4500);
+}
+async function api(method, url, body) {
+  const res = await fetch(url, { method, headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || res.statusText));
+  return data.data ?? data;
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copied to clipboard', 'ok'); }
+  catch { prompt('Copy this link:', text); }
+}
+
+const dlg = $('#dlg');
+function openDialog(title, body, foot = '') {
+  dlg.innerHTML = `<div class="dhead"><h2>${title}</h2><button class="btn outline icon sm" data-close>${I('x')}</button></div>
+    <div class="dbody">${body}</div>${foot ? `<div class="dfoot">${foot}</div>` : ''}`;
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  if (!dlg.open) dlg.showModal();
+}
+dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+
+function confirmBox(title, message, okLabel = 'Delete', noLabel = 'Cancel') {
+  const c = $('#cdlg');
+  c.innerHTML = `<div class="dhead"><h2>${esc(title)}</h2></div><div class="dbody" style="padding-top:14px">${esc(message)}</div>
+    <div class="dfoot"><button class="btn outline" id="c-no">${esc(noLabel)}</button><button class="btn danger" id="c-yes">${esc(okLabel)}</button></div>`;
+  c.showModal();
+  return new Promise((resolve) => {
+    $('#c-no').onclick = () => { c.close(); resolve(false); };
+    $('#c-yes').onclick = () => { c.close(); resolve(true); };
+    c.addEventListener('close', () => resolve(false), { once: true });
+  });
+}
+
+let timers = [];
+const every = (fn, ms) => timers.push(setInterval(fn, ms));
+const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
+
+let products = [];
+const store = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const cart = store('cart', {});
+const customer = store('customer', { name: '', email: '', contact: '' });
+const persist = () => { try { localStorage.setItem('cart', JSON.stringify(cart)); localStorage.setItem('customer', JSON.stringify(customer)); } catch {} };
+const cartCount = () => Object.values(cart).reduce((a, b) => a + b, 0);
+
+const routes = {
+  shop:      { label: 'Shop',      sub: 'Browse products and check out securely',        fn: renderShop },
+  orders:    { label: 'Orders',    sub: 'Every order with its live payment status',      fn: renderOrders },
+  products:  { label: 'Products',  sub: 'Manage catalogue, pricing and stock',           fn: renderProducts },
+  webhooks:  { label: 'Webhooks',  sub: 'Audit log of signed Razorpay events',           fn: renderWebhooks },
+  dashboard: { label: 'Dashboard', sub: 'Business and payment health at a glance',       fn: renderDashboard },
+};
+$('#nav').innerHTML = Object.entries(routes).map(([k, r]) => `<a href="#/${k}" data-r="${k}">${I(k)}<span>${r.label}</span></a>`).join('');
+
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('theme', t); } catch {}
+  $('#theme').innerHTML = I(t === 'dark' ? 'sun' : 'moon');
+}
+$('#theme').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+setTheme(document.documentElement.dataset.theme);
+
+function drawTopActions() {
+  $('#topactions').innerHTML = `<button class="btn outline" id="opencart">${I('cart')} Cart${cartCount() ? ` <span class="pill" style="background:var(--accent);color:#fff;border-color:var(--accent)">${cartCount()}</span>` : ''}</button>`;
+  $('#opencart').onclick = openCart;
+}
+
+async function route() {
+  clearTimers();
+  const key = routes[(location.hash.replace('#/', '') || 'shop').split('/')[0]] ? (location.hash.replace('#/', '') || 'shop').split('/')[0] : 'shop';
+  document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.r === key));
+  $('#title').textContent = routes[key].label; $('#subtitle').textContent = routes[key].sub;
+  drawTopActions();
+  try { await routes[key].fn(); } catch (e) { $('#view').innerHTML = `<div class="card empty"><b>Something went wrong</b>${esc(e.message)}</div>`; }
+}
+window.addEventListener('hashchange', route);
+
+let shopSearch = '', shopSort = 'id';
+async function renderShop() {
+  $('#view').innerHTML = `
+    <div class="toolbar"><div class="grow">${I('search')}<input id="q" placeholder="Search products" value="${esc(shopSearch)}"></div>
+      <select id="sort"><option value="id">Newest</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option><option value="name">Name A–Z</option></select></div>
+    <div class="grid" id="grid">${'<div class="skeleton"></div>'.repeat(4)}</div>`;
+  $('#q').oninput = (e) => { shopSearch = e.target.value; drawGrid(); };
+  $('#sort').value = shopSort; $('#sort').onchange = (e) => { shopSort = e.target.value; drawGrid(); };
+  await loadProducts(); drawGrid();
+}
+async function loadProducts() {
+  products = await api('GET', '/api/products');
+  for (const id of Object.keys(cart)) {
+    const p = products.find((x) => x.id == id);
+    if (!p) delete cart[id]; else cart[id] = Math.min(cart[id], p.stock_quantity);
+  }
+  persist(); drawTopActions();
+}
+function drawGrid() {
+  const sorters = { id: (a, b) => b.id - a.id, low: (a, b) => a.price - b.price, high: (a, b) => b.price - a.price, name: (a, b) => a.name.localeCompare(b.name) };
+  const list = products.filter((p) => p.name.toLowerCase().includes(shopSearch.toLowerCase())).sort(sorters[shopSort]);
+  $('#grid').innerHTML = list.map((p) => {
+    const q = cart[p.id] || 0;
+    return `<div class="card prod">
+      <div data-view="${p.id}" style="cursor:pointer">${tileHTML(p, '', p.stock_quantity <= 5 ? `<span class="badge b-pending">Only ${p.stock_quantity} left</span>` : '')}</div>
+      <div><h3 data-view="${p.id}" style="cursor:pointer">${esc(p.name)}</h3><div class="muted clamp">${esc(p.description || `${p.stock_quantity} in stock`)}</div></div>
+      <div class="price">${inr(p.price)}</div>
+      ${q ? `<div class="stepper"><button data-dec="${p.id}">−</button><b>${q} in cart</b><button data-inc="${p.id}" ${q >= p.stock_quantity ? 'disabled' : ''}>+</button></div>`
+          : `<button class="btn block" data-inc="${p.id}">${I('plus')} Add to cart</button>`}
+    </div>`;
+  }).join('') || `<div class="card empty" style="grid-column:1/-1"><b>No products found</b>Try a different search, or add products in the Products tab.</div>`;
+}
+
+function changeQty(id, delta) {
+  const p = products.find((x) => x.id == id); if (!p) return;
+  cart[id] = Math.max(0, Math.min(p.stock_quantity, (cart[id] || 0) + delta));
+  if (!cart[id]) delete cart[id];
+  persist(); drawTopActions();
+  if ($('#grid')) drawGrid();
+  if (!$('#cartpanel').hidden) drawCart();
+}
+
+function quickView(id) {
+  const p = products.find((x) => x.id == id); if (!p) return;
+  let q = Math.max(1, cart[id] || 1);
+  openDialog(esc(p.name), `
+    <div style="margin-top:14px">${tileHTML(p, 'height:210px;font-size:76px')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+      <div class="price" style="font-size:26px">${inr(p.price)}</div>
+      <span class="badge ${p.stock_quantity <= 5 ? 'b-pending' : 'b-paid'}">${p.stock_quantity <= 5 ? `Only ${p.stock_quantity} left` : 'In stock'}</span></div>
+    <p style="margin:12px 0 0;color:var(--muted)">${esc(p.description || 'No description available.')}</p>`,
+    `<div class="stepper" style="min-width:140px"><button id="qv-m">−</button><b id="qv-q">${q}</b><button id="qv-p">+</button></div>
+     <button class="btn" id="qv-add">${I('cart')} Add to cart</button>`);
+  const show = () => { $('#qv-q').textContent = q; $('#qv-m').disabled = q <= 1; $('#qv-p').disabled = q >= p.stock_quantity; };
+  $('#qv-m').onclick = () => { q--; show(); };
+  $('#qv-p').onclick = () => { q++; show(); };
+  $('#qv-add').onclick = () => {
+    cart[id] = q; persist(); drawTopActions(); if ($('#grid')) drawGrid();
+    dlg.close(); toast(`${q} × ${p.name} added to cart`, 'ok');
+  };
+  show();
+}
+
+function removeLine(id) { delete cart[id]; afterCartChange(); }
+function clearCart() { Object.keys(cart).forEach((k) => delete cart[k]); afterCartChange(); }
+function afterCartChange() {
+  persist(); drawTopActions();
+  if ($('#grid')) drawGrid();
+  if (!$('#cartpanel').hidden) drawCart();
+}
+
+async function openCart() {
+  if (!products.length) await loadProducts();
+  $('#scrim').hidden = false; $('#cartpanel').hidden = false; drawCart();
+}
+function closeCart() { $('#scrim').hidden = true; $('#cartpanel').hidden = true; }
+$('#scrim').onclick = closeCart;
+
+function drawCart() {
+  const lines = Object.entries(cart).map(([id, q]) => ({ p: products.find((x) => x.id == id), q })).filter((l) => l.p);
+  const total = lines.reduce((s, l) => s + l.p.price * l.q, 0);
+  $('#cartpanel').innerHTML = `
+    <header><h2>Your cart (${cartCount()})</h2><button class="btn outline icon sm" id="cart-x">${I('x')}</button></header>
+    <div class="body">
+      ${lines.length ? lines.map((l) => `<div class="cline">${tileHTML(l.p)}
+        <div class="info"><b>${esc(l.p.name)}</b><span class="muted">${inr(l.p.price)} each</span></div>
+        <div class="stepper"><button data-dec="${l.p.id}">−</button><span>${l.q}</span><button data-inc="${l.p.id}" ${l.q >= l.p.stock_quantity ? 'disabled' : ''}>+</button></div>
+        <b class="nowrap" style="min-width:76px;text-align:right">${inr(l.p.price * l.q)}</b>
+        <button class="btn outline icon sm" data-remove="${l.p.id}" title="Remove from cart">${I('trash', 14)}</button></div>`).join('')
+        : `<div class="empty"><b>Your cart is empty</b>Add products from the shop to continue.</div>`}
+      ${lines.length ? `<div class="section"><h3>Contact details (optional)</h3>
+        <label style="margin-top:0">Full name</label><input id="c-name" value="${esc(customer.name)}" autocomplete="name">
+        <div class="two"><div><label>Email</label><input id="c-email" type="email" value="${esc(customer.email)}" autocomplete="email"></div>
+        <div><label>Phone</label><input id="c-contact" value="${esc(customer.contact)}" autocomplete="tel"></div></div>
+        <p class="muted" style="font-size:12px;margin:8px 0 0">Used only to pre-fill the payment window. Not stored.</p></div>` : ''}
+    </div>
+    ${lines.length ? `<div class="foot">
+      <div class="sumrow"><span class="muted">Subtotal</span><span>${inr(total)}</span></div>
+      <div class="sumrow"><span class="muted">Taxes &amp; shipping</span><span>Included</span></div>
+      <div class="sumrow total"><span>Total</span><span>${inr(total)}</span></div>
+      <div class="methods"><span class="pill">UPI</span><span class="pill">Cards</span><span class="pill">Netbanking</span><span class="pill">Wallets</span><span class="pill">EMI</span></div>
+      <button class="btn block" id="checkout">Pay ${inr(total)}</button>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn outline block" id="keep">Continue shopping</button><button class="btn outline block" style="color:var(--bad)" id="clearcart">Clear cart</button></div>
+      <div class="secure">${I('lock', 14)} Secured by Razorpay · Total is verified on our server</div></div>` : ''}`;
+  $('#cart-x').onclick = closeCart;
+  for (const [id, key] of [['#c-name', 'name'], ['#c-email', 'email'], ['#c-contact', 'contact']]) {
+    const el = $(id); if (el) el.oninput = () => { customer[key] = el.value; persist(); };
+  }
+  const co = $('#checkout'); if (co) co.onclick = () => checkout(co);
+  const keep = $('#keep'); if (keep) keep.onclick = () => { closeCart(); location.hash = '#/shop'; };
+  const clr = $('#clearcart'); if (clr) clr.onclick = async () => { if (await confirmBox('Clear cart', 'Remove all items from your cart?', 'Clear cart', 'Keep items')) clearCart(); };
+}
+
+async function checkout(btn) {
+  btn.disabled = true; btn.textContent = 'Creating order…';
+  try {
+    const items = Object.entries(cart).map(([product_id, quantity]) => ({ product_id: +product_id, quantity }));
+    const hasCustomer = Object.values(customer).some((v) => v && v.trim());
+    const order = await api('POST', '/api/orders', hasCustomer ? { items, customer } : { items });
+    Object.keys(cart).forEach((k) => delete cart[k]); persist();
+    closeCart(); toast(`Order ${order.order_number} created`, 'ok');
+    await loadProducts(); if ($('#grid')) drawGrid();
+    try { await payOrder(order.id); }
+    catch (e) { toast(e.message, 'err'); showOrder(order.id); }
+  } catch (e) { toast(e.message, 'err'); drawCart(); await loadProducts().catch(() => {}); if ($('#grid')) drawGrid(); }
+}
+
+async function payOrder(orderId) {
+  const co = await api('POST', `/api/orders/${orderId}/payment`);
+  const rzp = new Razorpay({
+    key: co.key_id, order_id: co.razorpay_order_id, amount: co.amount, currency: co.currency,
+    name: 'Payments Console', description: `Order ${co.order_reference}`, theme: { color: '#2563eb' },
+    prefill: { name: customer.name, email: customer.email, contact: customer.contact },
+    config: { display: {
+      blocks: {
+        upi: { name: 'Pay via UPI', instruments: [{ method: 'upi' }] },
+        cards: { name: 'Cards', instruments: [{ method: 'card' }] },
+        netbanking: { name: 'Netbanking', instruments: [{ method: 'netbanking' }] },
+        wallets: { name: 'Wallets', instruments: [{ method: 'wallet' }] },
+      },
+      sequence: ['block.upi', 'block.cards', 'block.netbanking', 'block.wallets'],
+      preferences: { show_default_blocks: true },
+    } },
+    handler: async (r) => {
+      try { await api('POST', '/api/payments/verify', r); toast('Payment successful and verified', 'ok'); }
+      catch (e) { toast(e.message, 'err'); }
+      showOrder(orderId);
+    },
+    modal: { ondismiss: () => { toast('Payment window closed. The status updates automatically.'); showOrder(orderId); } },
+  });
+  rzp.on('payment.failed', (r) => toast('Payment failed: ' + r.error.description, 'err'));
+  rzp.open();
+}
+
+let orderFilter = 'all', orderSearch = '';
+async function renderOrders() {
+  $('#view').innerHTML = `<div class="toolbar"><div class="tabs" id="tabs">${['all', 'paid', 'unpaid', 'cancelled'].map((f) => `<button data-f="${f}" class="${f === orderFilter ? 'on' : ''}">${f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>
+    <div class="grow">${I('search')}<input id="oq" placeholder="Search order number" value="${esc(orderSearch)}"></div></div>
+    <div class="card scroll" id="orders"></div>`;
+  $('#tabs').onclick = (e) => { if (e.target.dataset.f) { orderFilter = e.target.dataset.f; document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.f === orderFilter)); drawOrders(); } };
+  $('#oq').oninput = (e) => { orderSearch = e.target.value; drawOrders(); };
+  let all = [];
+  const load = async () => { all = await api('GET', '/api/orders'); drawOrders(); };
+  const drawOrders = () => {
+    const match = (o) => ({ all: true, paid: o.payment_status === 'paid', cancelled: o.order_status === 'cancelled',
+      unpaid: o.payment_status === 'unpaid' && o.order_status !== 'cancelled' })[orderFilter];
+    const list = all.filter((o) => match(o) && o.order_number.toLowerCase().includes(orderSearch.toLowerCase()));
+    $('#orders').innerHTML = list.length ? `<table><thead><tr><th>Order</th><th>Date</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th class="right">Actions</th></tr></thead><tbody>
+      ${list.map((o) => `<tr class="click" data-order="${o.id}"><td><b>${esc(o.order_number)}</b></td><td class="muted nowrap">${when(o.created_at)}</td><td>${o.items_count}</td>
+        <td><b>${inr(o.total_amount)}</b></td><td>${badge(o.payment_status)}</td><td>${badge(o.order_status)}</td>
+        <td class="right nowrap">${o.invoice_url ? `<a class="btn outline sm" style="text-decoration:none;color:var(--text)" href="${esc(o.invoice_url)}" target="_blank" rel="noopener" data-noopen>Invoice</a>` : ''}
+          ${o.can_cancel ? `<button class="btn outline sm" style="color:var(--bad)" data-cancel="${o.id}">Cancel</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+      : `<div class="empty"><b>No orders found</b>Orders appear here as soon as a customer checks out.</div>`;
+  };
+  await load(); every(() => load().catch(() => {}), 5000);
+}
+
+function orderFooter(o, latest) {
+  if (o.invoice_url) return `<a class="btn" href="${esc(o.invoice_url)}" target="_blank" rel="noopener">${I('external')} View / print invoice</a>`;
+  if (o.order_status === 'cancelled' || o.payment_status === 'paid') return '';
+  return `<button class="btn outline" style="color:var(--bad);margin-right:auto" id="cancelorder">Cancel order</button>
+    <button class="btn outline" id="getlink">${I('link')} ${latest?.payment_link ? 'Refresh link' : 'Get payment link'}</button>
+    <button class="btn" id="paynow">${I('card')} Pay with Checkout</button>`;
+}
+
+async function cancelOrder(id) {
+  if (!(await confirmBox('Cancel this order?', 'Items go back to stock and any payment link stops working. This cannot be undone.', 'Yes, cancel order', 'Keep order'))) return;
+  try {
+    await api('POST', `/api/orders/${id}/cancel`);
+    toast('Order cancelled', 'ok');
+    if (dlg.open) await showOrder(id);
+    route();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+let orderTimer;
+async function showOrder(id) {
+  clearInterval(orderTimer);
+  const draw = async () => {
+    const o = await api('GET', `/api/orders/${id}`);
+    const latest = o.payments[o.payments.length - 1];
+    const attempts = o.payments.flatMap((p) => p.attempts.map((a) => ({ ...a, payment: p })));
+    openDialog(`Order ${esc(o.order_number)}`, `
+      ${o.payment_status === 'paid' && o.order_status === 'cancelled'
+        ? `<div class="banner bad"><span>Payment was received after this order was cancelled. A refund is required.</span></div>`
+        : o.payment_status === 'paid'
+          ? `<div class="banner ok"><span>${I('lock')} Payment received. Thank you!</span>${o.invoice_url ? `<a class="btn sm" href="${esc(o.invoice_url)}" target="_blank" rel="noopener">View invoice</a>` : ''}</div>`
+          : o.order_status === 'cancelled' ? `<div class="banner bad"><span>This order was cancelled. Reserved stock was released.</span></div>` : ''}
+      <div style="display:flex;gap:8px;margin:14px 0 0;align-items:center">${badge(o.payment_status)} ${badge(o.order_status)}</div>
+      <div class="section"><h3>Items</h3><table><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Unit price</th><th class="right">Subtotal</th></tr></thead><tbody>
+        ${o.items.map((i) => `<tr><td>${esc(i.name ?? '#' + i.product_id)}</td><td class="right">${i.quantity}</td><td class="right">${inr(i.unit_price)}</td><td class="right">${inr(i.subtotal)}</td></tr>`).join('')}
+        <tr><td colspan="3" class="right"><b>Total</b></td><td class="right"><b>${inr(o.total_amount)}</b></td></tr></tbody></table></div>
+      ${o.payment_status !== 'paid' && o.order_status !== 'cancelled' ? `<div class="section"><h3>Collect payment</h3>
+        ${latest?.payment_link ? `<div class="linkbox">${I('link')}<a href="${esc(latest.payment_link)}" target="_blank" rel="noopener">${esc(latest.payment_link)}</a>
+          <button class="btn outline sm" id="copylink">${I('copy', 15)} Copy</button><a class="btn outline sm" style="color:var(--text);text-decoration:none" href="${esc(latest.payment_link)}" target="_blank" rel="noopener">${I('external', 15)} Open</a></div>
+          <p class="muted" style="margin:8px 0 0;font-size:12px">Share this link with the customer. The order is marked paid automatically when the webhook arrives.</p>` : '<p class="muted" style="margin:0">No payment link yet. Click “Get payment link” to create one.</p>'}</div>` : ''}
+      <div class="section"><h3>Payment attempts</h3>
+        ${attempts.length ? `<ul class="timeline">${attempts.map((a) => `<li class="${esc(a.status)}"><div>${badge(a.status)} ${a.method ? `<span class="pill">${esc(a.method.toUpperCase())}${a.method_detail ? ' · ' + esc(a.method_detail) : ''}</span>` : ''}</div>
+          <div class="muted" style="font-size:12px;margin-top:3px"><code>${esc(a.razorpay_payment_id)}</code> ${esc(a.error_description ?? '')}</div></li>`).join('')}</ul>`
+          : '<p class="muted" style="margin:0">No attempts yet.</p>'}
+        ${o.payments.map((p) => `<div class="muted" style="font-size:12px">Razorpay order <code>${esc(p.razorpay_order_id)}</code> ${badge(p.status)}${p.confirmed_via ? ` confirmed via <b>${esc(p.confirmed_via.replace('_', ' '))}</b>` : ''}</div>`).join('')}
+      </div>`,
+      orderFooter(o, latest));
+    $('#cancelorder')?.addEventListener('click', () => cancelOrder(id));
+    $('#copylink')?.addEventListener('click', () => copy(latest.payment_link));
+    $('#getlink')?.addEventListener('click', async () => { try { await api('POST', `/api/orders/${id}/payment`); await draw(); } catch (e) { toast(e.message, 'err'); } });
+    $('#paynow')?.addEventListener('click', () => { dlg.close(); payOrder(id).catch((e) => toast(e.message, 'err')); });
+    if (o.payment_status === 'paid') clearInterval(orderTimer);
+  };
+  await draw().catch((e) => toast(e.message, 'err'));
+  orderTimer = setInterval(() => { if (dlg.open && $('#paynow') !== null) draw().catch(() => {}); else clearInterval(orderTimer); }, 4000);
+}
+
+let productSearch = '';
+async function renderProducts() {
+  $('#view').innerHTML = `<div class="toolbar"><div class="grow">${I('search')}<input id="search" placeholder="Search products" value="${esc(productSearch)}"></div>
+    <button class="btn" id="add" style="margin-left:auto">${I('plus')} Add product</button></div><div class="card scroll" id="plist"></div>`;
+  $('#search').oninput = (e) => { productSearch = e.target.value; drawProducts(); };
+  $('#add').onclick = () => productForm();
+  products = await api('GET', '/api/products?all=1'); drawProducts();
+}
+function drawProducts() {
+  const list = products.filter((p) => p.name.toLowerCase().includes(productSearch.toLowerCase()));
+  $('#plist').innerHTML = list.length ? `<table><thead><tr><th>Product</th><th class="right">Price</th><th class="right">Stock</th><th class="right">Actions</th></tr></thead><tbody>
+    ${list.map((p) => `<tr><td><div style="display:flex;align-items:center;gap:12px">${tileHTML(p, 'height:36px;width:36px;font-size:16px;border-radius:8px;flex:none')}<div><b>${esc(p.name)}</b><div class="muted" style="font-size:12px">ID ${p.id}</div></div></div></td>
+      <td class="right"><b>${inr(p.price)}</b></td>
+      <td class="right">${p.stock_quantity === 0 ? '<span class="badge b-failed">Out of stock</span>' : p.stock_quantity <= 5 ? `<span class="badge b-pending">${p.stock_quantity} low</span>` : p.stock_quantity}</td>
+      <td class="right nowrap"><button class="btn outline sm" data-edit="${p.id}">${I('edit', 14)} Edit</button> <button class="btn outline sm" style="color:var(--bad)" data-del="${p.id}">${I('trash', 14)}</button></td></tr>`).join('')}</tbody></table>`
+    : `<div class="empty"><b>No products</b>Click “Add product” to create your first one.</div>`;
+}
+function productForm(p) {
+  openDialog(p ? 'Edit product' : 'Add product', `
+    <label>Product name</label><input id="f-name" value="${esc(p?.name ?? '')}" maxlength="255" placeholder="e.g. Wireless Mouse">
+    <label>Description</label><input id="f-desc" value="${esc(p?.description ?? '')}" maxlength="1000" placeholder="Short description shown in the shop">
+    <label>Image URL (optional)</label><input id="f-img" type="url" value="${esc(p?.image_url ?? '')}" maxlength="500" placeholder="https://…">
+    <div class="two"><div><label>Price (₹)</label><input id="f-price" type="number" min="1" step="0.01" value="${p ? p.price / 100 : ''}" placeholder="0.00"></div>
+    <div><label>Stock quantity</label><input id="f-stock" type="number" min="0" step="1" value="${p?.stock_quantity ?? 0}"></div></div>`,
+    `<button class="btn outline" id="f-cancel">Cancel</button><button class="btn" id="save">${p ? 'Save changes' : 'Create product'}</button>`);
+  $('#f-cancel').onclick = () => dlg.close();
+  $('#save').onclick = async () => {
+    const body = { name: $('#f-name').value.trim(), description: $('#f-desc').value.trim() || null, image_url: $('#f-img').value.trim() || null, price: Math.round(parseFloat($('#f-price').value) * 100), stock_quantity: parseInt($('#f-stock').value, 10) };
+    if (!body.name || !(body.price >= 100) || !(body.stock_quantity >= 0)) return toast('Enter a name, a price of at least ₹1, and the stock', 'err');
+    try { await api(p ? 'PUT' : 'POST', p ? `/api/products/${p.id}` : '/api/products', body); dlg.close(); toast(p ? 'Product updated' : 'Product created', 'ok'); renderProducts(); }
+    catch (err) { toast(err.message, 'err'); }
+  };
+}
+
+async function renderWebhooks() {
+  $('#view').innerHTML = `<div class="card scroll" id="events"></div>`;
+  const draw = async () => {
+    const list = await api('GET', '/api/webhook-events');
+    const open = new Set([...document.querySelectorAll('#events details[open]')].map((d) => d.dataset.id));
+    $('#events').innerHTML = list.length ? `<table><thead><tr><th>Event</th><th>Event ID</th><th>Status</th><th>Tries</th><th>Received</th></tr></thead><tbody>
+      ${list.map((ev) => `<tr><td><b>${esc(ev.event_type)}</b></td><td><code>${esc(ev.event_id.slice(0, 30))}</code></td>
+        <td>${badge(ev.processing_status)}${ev.error ? `<div class="muted" style="font-size:12px;margin-top:3px">${esc(ev.error)}</div>` : ''}</td><td>${ev.attempts}</td><td class="muted nowrap">${when(ev.created_at)}</td></tr>
+        <tr><td colspan="5" style="padding-top:0"><details data-id="${ev.id}" ${open.has(String(ev.id)) ? 'open' : ''}><summary>View payload</summary><pre>${esc(JSON.stringify(ev.payload, null, 2))}</pre></details></td></tr>`).join('')}</tbody></table>`
+      : `<div class="empty"><b>No webhook events yet</b>Point your Razorpay webhook to <code>/api/webhooks/razorpay</code> (ngrok URL) and make a test payment.</div>`;
+  };
+  await draw(); every(() => draw().catch(() => {}), 5000);
+}
+
+async function renderDashboard() {
+  $('#view').innerHTML = `<div class="stats" id="stats1"></div><div class="stats" id="stats2"></div>
+    <div class="card"><div class="pad" style="padding-bottom:6px"><b>Recent orders</b></div><div class="scroll" id="recent"></div></div>`;
+  const draw = async () => {
+    const [s, orders] = await Promise.all([api('GET', '/api/dashboard/stats'), api('GET', '/api/orders')]);
+    const tile = ([l, v, icon]) => `<div class="card stat"><div class="l">${I(icon)} ${l}</div><div class="v">${v}</div></div>`;
+    $('#stats1').innerHTML = [['Revenue (paid)', inr(s.revenue), 'card'], ['Total orders', s.orders, 'orders'], ['Paid orders', s.paid_orders, 'lock'], ['Awaiting payment', s.unpaid_orders, 'cart']].map(tile).join('');
+    $('#stats2').innerHTML = [['Products', s.products, 'products'], ['Low / out of stock', s.low_stock, 'products'], ['Cancelled orders', s.cancelled_orders, 'x'], ['Webhook events', s.webhook_events, 'webhooks'], ['Failed webhooks', s.webhook_failed, 'webhooks']].map(tile).join('');
+    $('#recent').innerHTML = orders.length ? `<table><thead><tr><th>Order</th><th>Date</th><th>Total</th><th>Payment</th></tr></thead><tbody>
+      ${orders.slice(0, 6).map((o) => `<tr class="click" data-order="${o.id}"><td><b>${esc(o.order_number)}</b></td><td class="muted">${when(o.created_at)}</td><td>${inr(o.total_amount)}</td><td>${badge(o.payment_status)}</td></tr>`).join('')}</tbody></table>`
+      : '<div class="empty"><b>No orders yet</b></div>';
+  };
+  await draw(); every(() => draw().catch(() => {}), 5000);
+}
+
+document.addEventListener('click', async (e) => {
+  const inc = e.target.closest('[data-inc]'), dec = e.target.closest('[data-dec]');
+  if (inc) return changeQty(inc.dataset.inc, 1);
+  if (dec) return changeQty(dec.dataset.dec, -1);
+  const rm = e.target.closest('[data-remove]'); if (rm) return removeLine(rm.dataset.remove);
+  const vw = e.target.closest('[data-view]'); if (vw) return quickView(vw.dataset.view);
+  const canc = e.target.closest('[data-cancel]'); if (canc) return cancelOrder(canc.dataset.cancel);
+  if (e.target.closest('[data-noopen]')) return;
+  const row = e.target.closest('[data-order]'); if (row) return showOrder(row.dataset.order);
+  const ed = e.target.closest('[data-edit]'); if (ed) return productForm(products.find((p) => p.id == ed.dataset.edit));
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    const p = products.find((x) => x.id == del.dataset.del);
+    if (!(await confirmBox('Delete product', `Delete “${p.name}”? This can't be undone.`))) return;
+    try { await api('DELETE', `/api/products/${p.id}`); toast('Product deleted', 'ok'); renderProducts(); }
+    catch (err) { toast(err.message, 'err'); }
+  }
+});
+
+route();
+</script>
+</body>
+</html>
